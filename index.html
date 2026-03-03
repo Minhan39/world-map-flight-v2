@@ -80,6 +80,7 @@ body{display:flex;flex-direction:column}
 .plane-icon{
   font-size:15px;dominant-baseline:central;text-anchor:middle;
   pointer-events:none;
+  fill: white;
 }
 
 /* dest pin */
@@ -449,11 +450,10 @@ function flyLine(fromPx, toPx, index){
     .attr("stroke-dasharray","6 5");
 
   // plane icon
-  const plane = gPlanes.append("text")
+  const plane = gPlanes.append("path")
     .attr("class","plane-icon")
-    .attr("x", fromPx[0]).attr("y", fromPx[1])
-    .attr("opacity",0)
-    .text("✈");
+    .attr("fill","white")
+    .attr("d","M0,-6 L2,-1 L8,1 L2,2 L1,5 L0,4 L-1,5 L-2,2 L-8,1 L-2,-1 Z");
 
   const dx = toPx[0] - fromPx[0];
   const dy = toPx[1] - fromPx[1];
@@ -478,10 +478,8 @@ function flyLine(fromPx, toPx, index){
                   raw > 0.92 ? (1-raw)/0.08 : 1;
 
     plane
-      .attr("x", cx).attr("y", cy)
       .attr("opacity", scale)
-      .attr("transform",
-        `rotate(${angleDeg}, ${cx}, ${cy}) translate(-8, 0)`);
+      .attr("transform", `translate(${cx},${cy}) rotate(${angleDeg}) scale(${1.2})`);
 
     if(raw < 1){
       rafHandles.push(requestAnimationFrame(frame));
