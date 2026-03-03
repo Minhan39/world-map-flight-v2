@@ -10,22 +10,22 @@ background:#06080f;
 color:#cdc8c0;
 border-radius:8px;
 overflow:hidden;
-font-family:'Space Mono',monospace;
+font-family:monospace;
 }
 
-/* topbar */
+/* top bar */
 
 .flight-map-widget .topbar{
 display:flex;
-align-items:center;
 justify-content:space-between;
-padding:.7rem 1.4rem;
+align-items:center;
+padding:.7rem 1.2rem;
 border-bottom:1px solid rgba(232,184,75,.15);
 }
 
 .flight-map-widget .brand{
 color:#e8b84b;
-font-weight:600;
+font-weight:bold;
 }
 
 .flight-map-widget .year-tabs{
@@ -34,38 +34,16 @@ gap:.3rem;
 }
 
 .flight-map-widget .ytab{
-padding:.25rem .7rem;
 border:1px solid #3d4f63;
 background:none;
 color:#3d4f63;
+padding:.2rem .6rem;
 cursor:pointer;
 }
 
 .flight-map-widget .ytab.active{
 color:#e8b84b;
 border-color:#e8b84b;
-}
-
-/* progress ring */
-
-.flight-map-widget .pring{
-width:34px;
-height:34px;
-transform:rotate(-90deg);
-}
-
-.flight-map-widget .pring circle{
-fill:none;
-stroke-width:2.2;
-}
-
-.flight-map-widget .pring .bg{
-stroke:rgba(232,184,75,.12);
-}
-
-.flight-map-widget .pring .fg{
-stroke:#e8b84b;
-stroke-linecap:round;
 }
 
 /* map */
@@ -82,8 +60,8 @@ height:100%;
 
 .flight-map-widget .country{
 fill:#1c2a3e;
-stroke:rgba(255,255,255,.04);
-stroke-width:.35px;
+stroke:rgba(255,255,255,.05);
+stroke-width:.3px;
 }
 
 .flight-map-widget .arc-line{
@@ -156,7 +134,7 @@ opacity:1;
 .flight-map-widget .yr-num{
 font-size:10vw;
 color:rgba(232,184,75,.08);
-font-weight:700;
+font-weight:bold;
 }
 
 </style>
@@ -167,11 +145,6 @@ font-weight:700;
 <div class="brand">✈ Hành Trình</div>
 
 <div class="year-tabs" id="yearTabs"></div>
-
-<svg class="pring" viewBox="0 0 34 34">
-<circle class="bg" cx="17" cy="17" r="13.5"/>
-<circle class="fg" id="pfg" cx="17" cy="17" r="13.5"/>
-</svg>
 
 </div>
 
@@ -204,8 +177,8 @@ if(!root)return
 const svg=d3.select(root).select("#mapSvg")
 const wrap=root.querySelector("#mapWrap")
 
-let W=wrap.clientWidth
-let H=600
+const W=wrap.clientWidth
+const H=600
 
 const projection=d3.geoNaturalEarth1()
 .scale(W/6.1)
@@ -237,6 +210,7 @@ dests:[
 }
 
 const YEARS=Object.keys(JOURNEYS)
+
 let current=0
 
 fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
@@ -253,6 +227,7 @@ gCountries.selectAll("path")
 .attr("d",path)
 
 buildTabs()
+
 playYear(YEARS[0])
 
 setInterval(nextYear,4500)
@@ -267,12 +242,17 @@ const tabs=root.querySelector("#yearTabs")
 YEARS.forEach((yr,i)=>{
 
 const btn=document.createElement("button")
+
 btn.className="ytab"
+
 btn.innerText=yr
 
 btn.onclick=()=>{
+
 current=i
+
 playYear(yr)
+
 }
 
 tabs.appendChild(btn)
@@ -283,33 +263,48 @@ tabs.appendChild(btn)
 
 
 function nextYear(){
+
 current=(current+1)%YEARS.length
+
 playYear(YEARS[current])
+
 }
 
 
 function playYear(year){
 
 gLines.selectAll("*").remove()
+
 gPlanes.selectAll("*").remove()
+
 gPins.selectAll("*").remove()
 
 const tabs=root.querySelector("#yearTabs")
+
 tabs.querySelectorAll(".ytab").forEach(b=>b.classList.remove("active"))
+
 tabs.children[current].classList.add("active")
 
+
 const yrNum=root.querySelector("#yrNum")
+
 const ov=root.querySelector("#yrOverlay")
 
 if(yrNum)yrNum.textContent=year
+
 if(ov){
+
 ov.classList.add("show")
+
 setTimeout(()=>ov.classList.remove("show"),1000)
+
 }
+
 
 const data=JOURNEYS[year]
 
 const from=projection(data.from)
+
 
 gPins.append("circle")
 .attr("class","origin-dot")
@@ -317,17 +312,22 @@ gPins.append("circle")
 .attr("cy",from[1])
 .attr("r",5)
 
+
 const info=root.querySelector("#infoStrip")
+
 info.innerHTML=""
+
 
 data.dests.forEach(dest=>{
 
 const to=projection(dest.coord)
 
 const dx=to[0]-from[0]
+
 const dy=to[1]-from[1]
 
 const angle=Math.atan2(dy,dx)*180/Math.PI
+
 
 const line=gLines.append("line")
 .attr("class","arc-line")
@@ -336,44 +336,56 @@ const line=gLines.append("line")
 .attr("x2",from[0])
 .attr("y2",from[1])
 
+
 line.transition().duration(2000)
 .attr("x2",to[0])
 .attr("y2",to[1])
+
 
 const plane=gPlanes.append("path")
 .attr("class","plane-icon")
 .attr("d","M0,-6 L2,-1 L8,1 L2,2 L1,5 L0,4 L-1,5 L-2,2 L-8,1 L-2,-1 Z")
 
+
 const start=performance.now()
+
 
 function animate(now){
 
 const t=Math.min((now-start)/2000,1)
 
 const x=from[0]+dx*t
+
 const y=from[1]+dy*t
+
 
 plane.attr(
 "transform",
-`translate(${x},${y}) rotate(${angle}) scale(1.2)`
+`translate(${x},${y}) rotate(${angle + 90}) scale(1.2)`
 )
+
 
 if(t<1)requestAnimationFrame(animate)
 
 }
 
+
 requestAnimationFrame(animate)
+
 
 const g=gPins.append("g")
 .attr("transform","translate("+to[0]+","+to[1]+")")
 
+
 g.append("circle").attr("class","pin-core").attr("r",4)
+
 
 g.append("text")
 .attr("class","dest-label")
 .attr("x",8)
 .attr("y",-5)
 .text(dest.flag+" "+dest.name)
+
 
 info.innerHTML+=`
 <div class="info-item">
