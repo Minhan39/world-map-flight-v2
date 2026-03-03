@@ -7,20 +7,20 @@ width:100%;
 max-width:1200px;
 margin:auto;
 background:#06080f;
+color:#cdc8c0;
 border-radius:8px;
 overflow:hidden;
-color:#cdc8c0;
-font-family:monospace;
+font-family:'Space Mono',monospace;
 }
 
-/* header */
+/* topbar */
 
 .flight-map-widget .topbar{
 display:flex;
-justify-content:space-between;
 align-items:center;
-padding:10px 20px;
-border-bottom:1px solid rgba(232,184,75,.2);
+justify-content:space-between;
+padding:.7rem 1.4rem;
+border-bottom:1px solid rgba(232,184,75,.15);
 }
 
 .flight-map-widget .brand{
@@ -30,20 +30,42 @@ font-weight:600;
 
 .flight-map-widget .year-tabs{
 display:flex;
-gap:6px;
+gap:.3rem;
 }
 
 .flight-map-widget .ytab{
+padding:.25rem .7rem;
 border:1px solid #3d4f63;
 background:none;
 color:#3d4f63;
-padding:4px 12px;
 cursor:pointer;
 }
 
 .flight-map-widget .ytab.active{
-border-color:#e8b84b;
 color:#e8b84b;
+border-color:#e8b84b;
+}
+
+/* progress ring */
+
+.flight-map-widget .pring{
+width:34px;
+height:34px;
+transform:rotate(-90deg);
+}
+
+.flight-map-widget .pring circle{
+fill:none;
+stroke-width:2.2;
+}
+
+.flight-map-widget .pring .bg{
+stroke:rgba(232,184,75,.12);
+}
+
+.flight-map-widget .pring .fg{
+stroke:#e8b84b;
+stroke-linecap:round;
 }
 
 /* map */
@@ -60,12 +82,16 @@ height:100%;
 
 .flight-map-widget .country{
 fill:#1c2a3e;
-stroke:rgba(255,255,255,.05);
+stroke:rgba(255,255,255,.04);
 stroke-width:.35px;
 }
 
-.flight-map-widget .origin-dot{
+.flight-map-widget .country.is-origin{
 fill:#e8b84b;
+}
+
+.flight-map-widget .country.is-dest{
+fill:#e85c3a;
 }
 
 .flight-map-widget .arc-line{
@@ -73,6 +99,10 @@ stroke:#e8b84b;
 stroke-width:1.6;
 stroke-dasharray:6 5;
 fill:none;
+}
+
+.flight-map-widget .origin-dot{
+fill:#e8b84b;
 }
 
 .flight-map-widget .plane{
@@ -87,6 +117,8 @@ fill:#e85c3a;
 font-size:10px;
 fill:#cdc8c0;
 }
+
+/* info */
 
 .flight-map-widget .info-strip{
 position:absolute;
@@ -112,16 +144,56 @@ font-size:11px;
 color:#888;
 }
 
+/* year overlay */
+
+.flight-map-widget .yr-overlay{
+position:absolute;
+inset:0;
+display:flex;
+align-items:center;
+justify-content:center;
+opacity:0;
+transition:.4s;
+pointer-events:none;
+}
+
+.flight-map-widget .yr-overlay.show{
+opacity:1;
+}
+
+.flight-map-widget .yr-num{
+font-size:10vw;
+color:rgba(232,184,75,.08);
+font-weight:700;
+}
+
 </style>
 
+
 <div class="topbar">
+
 <div class="brand">✈ Hành Trình</div>
-<div class="year-tabs"></div>
+
+<div class="year-tabs" id="yearTabs"></div>
+
+<svg class="pring" viewBox="0 0 34 34">
+<circle class="bg" cx="17" cy="17" r="13.5"/>
+<circle class="fg" id="pfg" cx="17" cy="17" r="13.5"/>
+</svg>
+
 </div>
 
-<div class="map-wrap">
-<svg></svg>
-<div class="info-strip"></div>
+
+<div class="map-wrap" id="mapWrap">
+
+<div class="yr-overlay" id="yrOverlay">
+<div class="yr-num" id="yrNum"></div>
+</div>
+
+<svg id="mapSvg"></svg>
+
+<div class="info-strip" id="infoStrip"></div>
+
 </div>
 
 </section>
@@ -130,7 +202,6 @@ color:#888;
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
 
-
 <script>
 
 (function(){
@@ -138,21 +209,19 @@ color:#888;
 const root=document.querySelector(".flight-map-widget")
 if(!root)return
 
-const svg=d3.select(root).select("svg")
-const wrap=root.querySelector(".map-wrap")
-const info=root.querySelector(".info-strip")
-const tabs=root.querySelector(".year-tabs")
+const svg=d3.select(root).select("#mapSvg")
+const wrap=root.querySelector("#mapWrap")
 
-const width=wrap.clientWidth
-const height=600
-
-svg.attr("viewBox","0 0 "+width+" "+height)
+let W=wrap.clientWidth
+let H=600
 
 const projection=d3.geoNaturalEarth1()
-.scale(width/6.2)
-.translate([width/2,height/2])
+.scale(W/6.1)
+.translate([W/2,H/2])
 
 const path=d3.geoPath(projection)
+
+svg.attr("viewBox","0 0 "+W+" "+H)
 
 const gCountries=svg.append("g")
 const gLines=svg.append("g")
@@ -160,25 +229,19 @@ const gPlanes=svg.append("g")
 const gPins=svg.append("g")
 
 const JOURNEYS={
-2023:{
-from:[106.69,11.14],
+2023:{from:[106.69,11.14],
 dests:[
 {name:"Thái Lan",flag:"🇹🇭",coord:[100.5,15.5],km:"1780"},
-{name:"Singapore",flag:"🇸🇬",coord:[103.8,1.3],km:"1170"}
-]},
-2024:{
-from:[106.69,11.14],
+{name:"Singapore",flag:"🇸🇬",coord:[103.8,1.3],km:"1170"}]},
+2024:{from:[106.69,11.14],
 dests:[
 {name:"Hoa Kỳ",flag:"🇺🇸",coord:[-98,38],km:"12900"},
-{name:"Hàn Quốc",flag:"🇰🇷",coord:[127.8,36],km:"3560"}
-]},
-2025:{
-from:[106.69,11.14],
+{name:"Hàn Quốc",flag:"🇰🇷",coord:[127.8,36],km:"3560"}]},
+2025:{from:[106.69,11.14],
 dests:[
 {name:"Nhật Bản",flag:"🇯🇵",coord:[138,36],km:"4010"},
 {name:"Cuba",flag:"🇨🇺",coord:[-79.5,22],km:"16600"},
-{name:"Nga",flag:"🇷🇺",coord:[100,62],km:"7200"}
-]}
+{name:"Nga",flag:"🇷🇺",coord:[100,62],km:"7200"}]}
 }
 
 const YEARS=Object.keys(JOURNEYS)
@@ -204,8 +267,9 @@ setInterval(nextYear,4500)
 
 })
 
-
 function buildTabs(){
+
+const tabs=root.querySelector("#yearTabs")
 
 YEARS.forEach((yr,i)=>{
 
@@ -224,14 +288,10 @@ tabs.appendChild(btn)
 
 }
 
-
 function nextYear(){
-
 current=(current+1)%YEARS.length
 playYear(YEARS[current])
-
 }
-
 
 function playYear(year){
 
@@ -239,8 +299,18 @@ gLines.selectAll("*").remove()
 gPlanes.selectAll("*").remove()
 gPins.selectAll("*").remove()
 
+const tabs=root.querySelector("#yearTabs")
 tabs.querySelectorAll(".ytab").forEach(b=>b.classList.remove("active"))
 tabs.children[current].classList.add("active")
+
+const yrNum=root.querySelector("#yrNum")
+const ov=root.querySelector("#yrOverlay")
+
+if(yrNum)yrNum.textContent=year
+if(ov){
+ov.classList.add("show")
+setTimeout(()=>ov.classList.remove("show"),1000)
+}
 
 const data=JOURNEYS[year]
 
@@ -252,6 +322,7 @@ gPins.append("circle")
 .attr("cy",from[1])
 .attr("r",5)
 
+const info=root.querySelector("#infoStrip")
 info.innerHTML=""
 
 data.dests.forEach(dest=>{
@@ -270,8 +341,7 @@ const line=gLines.append("line")
 .attr("x2",from[0])
 .attr("y2",from[1])
 
-line.transition()
-.duration(2000)
+line.transition().duration(2000)
 .attr("x2",to[0])
 .attr("y2",to[1])
 
@@ -288,7 +358,9 @@ const t=Math.min((now-start)/2000,1)
 const x=from[0]+dx*t
 const y=from[1]+dy*t
 
-plane.attr("transform","translate("+x+","+y+") rotate("+(angle+90)+")")
+plane.attr("transform",
+`translate(${x},${y}) rotate(${angle+90})`
+)
 
 if(t<1)requestAnimationFrame(animate)
 
@@ -299,9 +371,7 @@ requestAnimationFrame(animate)
 const g=gPins.append("g")
 .attr("transform","translate("+to[0]+","+to[1]+")")
 
-g.append("circle")
-.attr("class","pin")
-.attr("r",4)
+g.append("circle").attr("class","pin").attr("r",4)
 
 g.append("text")
 .attr("class","dest-label")
