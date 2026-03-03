@@ -86,14 +86,6 @@ stroke:rgba(255,255,255,.04);
 stroke-width:.35px;
 }
 
-.flight-map-widget .country.is-origin{
-fill:#e8b84b;
-}
-
-.flight-map-widget .country.is-dest{
-fill:#e85c3a;
-}
-
 .flight-map-widget .arc-line{
 stroke:#e8b84b;
 stroke-width:1.6;
@@ -105,11 +97,11 @@ fill:none;
 fill:#e8b84b;
 }
 
-.flight-map-widget .plane{
+.flight-map-widget .plane-icon{
 fill:white;
 }
 
-.flight-map-widget .pin{
+.flight-map-widget .pin-core{
 fill:#e85c3a;
 }
 
@@ -267,6 +259,7 @@ setInterval(nextYear,4500)
 
 })
 
+
 function buildTabs(){
 
 const tabs=root.querySelector("#yearTabs")
@@ -288,10 +281,12 @@ tabs.appendChild(btn)
 
 }
 
+
 function nextYear(){
 current=(current+1)%YEARS.length
 playYear(YEARS[current])
 }
+
 
 function playYear(year){
 
@@ -345,9 +340,9 @@ line.transition().duration(2000)
 .attr("x2",to[0])
 .attr("y2",to[1])
 
-const plane=gPlanes.append("text")
-.attr("class","plane")
-.text("✈")
+const plane=gPlanes.append("path")
+.attr("class","plane-icon")
+.attr("d","M0,-6 L2,-1 L8,1 L2,2 L1,5 L0,4 L-1,5 L-2,2 L-8,1 L-2,-1 Z")
 
 const start=performance.now()
 
@@ -358,8 +353,9 @@ const t=Math.min((now-start)/2000,1)
 const x=from[0]+dx*t
 const y=from[1]+dy*t
 
-plane.attr("transform",
-`translate(${x},${y}) rotate(${angle+90})`
+plane.attr(
+"transform",
+`translate(${x},${y}) rotate(${angle}) scale(1.2)`
 )
 
 if(t<1)requestAnimationFrame(animate)
@@ -371,7 +367,7 @@ requestAnimationFrame(animate)
 const g=gPins.append("g")
 .attr("transform","translate("+to[0]+","+to[1]+")")
 
-g.append("circle").attr("class","pin").attr("r",4)
+g.append("circle").attr("class","pin-core").attr("r",4)
 
 g.append("text")
 .attr("class","dest-label")
