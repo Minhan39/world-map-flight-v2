@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hành Trình Bay — Vietnam</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#06080f;
+  --sea:#0c1520;
+  --land:#1c2a3e;
+  --land-hi:#243650;
+  --origin:#e8b84b;
+  --dest:#e85c3a;
+  --line:#e8b84b;
+  --text:#cdc8c0;
+  --muted:#3d4f63;
+  --accent:#e8b84b;
+}
+
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Space Mono',monospace}
+body{display:flex;flex-direction:column}
+
+/* ── TOP BAR ── */
+.topbar{
+  flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.75rem 2rem;
+  border-bottom:1px solid rgba(232,184,75,0.12);
+  background:rgba(6,8,15,0.95);
+  backdrop-filter:blur(10px);
+  z-index:20;
+}
+.brand{
+  font-family:'Cormorant Garamond',serif;
+  font-size:1.4rem;font-weight:700;letter-spacing:.12em;color:var(--accent)
+}
+.brand span{font-weight:300;color:var(--text);font-size:1rem}
+
+.year-tabs{display:flex;gap:.25rem}
+.ytab{
+  font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:600;
+  padding:.28rem .85rem;border:1px solid var(--muted);
+  background:transparent;color:var(--muted);cursor:pointer;
+  transition:all .25s;letter-spacing:.06em;
+}
+.ytab:hover{color:var(--text);border-color:rgba(232,184,75,.5)}
+.ytab.active{color:var(--accent);border-color:var(--accent);background:rgba(232,184,75,.07)}
+
+/* progress ring */
+.pring{width:34px;height:34px;transform:rotate(-90deg);overflow:visible}
+.pring circle{fill:none;stroke-width:2.2}
+.pring .bg{stroke:rgba(232,184,75,.12)}
+.pring .fg{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .08s linear}
+
+/* ── MAP ── */
+.map-wrap{flex:1;position:relative;overflow:hidden}
+#mapSvg{width:100%;height:100%;display:block}
+
+.country{fill:var(--land);stroke:rgba(255,255,255,0.035);stroke-width:.35px}
+.country.is-origin{fill:var(--origin)}
+.country.is-dest{fill:var(--dest);opacity:.85}
+
+.graticule{fill:none;stroke:rgba(255,255,255,0.025);stroke-width:.3px}
+
+/* arcs — straight lines in SVG space */
+.arc-line{
+  fill:none;stroke-width:1.6;opacity:.75;
+  stroke-linecap:round;
+  filter:drop-shadow(0 0 3px rgba(232,184,75,.55));
+}
+
+/* plane emoji text */
+.plane-icon{
+  font-size:15px;dominant-baseline:central;text-anchor:middle;
+  pointer-events:none;
+}
+
+/* dest pin */
+.pin-ring{
+  fill:none;stroke:var(--dest);stroke-width:1.2;
+  animation:pingOut 1.8s ease-out infinite;
+}
+.pin-core{fill:var(--dest);filter:drop-shadow(0 0 4px rgba(232,93,58,.9))}
+@keyframes pingOut{0%{r:4;opacity:.9}100%{r:16;opacity:0}}
+
+/* origin dot */
+.origin-dot{fill:var(--origin);filter:drop-shadow(0 0 5px rgba(232,184,75,.8))}
+
+/* dest label */
+.dest-label{
+  font-family:'Space Mono',monospace;font-size:9.5px;fill:var(--text);
+  pointer-events:none;text-anchor:start;dominant-baseline:auto;
+}
+
+/* ── INFO STRIP ── */
+.info-strip{
+  position:absolute;bottom:1.2rem;left:50%;transform:translateX(-50%);
+  display:flex;gap:0;
+  background:rgba(6,8,15,.88);border:1px solid rgba(232,184,75,.18);
+  backdrop-filter:blur(14px);
+  pointer-events:none;min-width:260px;
+}
+.info-item{
+  display:flex;flex-direction:column;align-items:center;
+  gap:.18rem;padding:.6rem 1.4rem;
+}
+.info-divider{width:1px;background:rgba(232,184,75,.15);align-self:stretch}
+.info-flag{font-size:1.25rem;line-height:1}
+.info-name{font-family:'Cormorant Garamond',serif;font-size:.85rem;font-weight:600;color:var(--accent);letter-spacing:.08em}
+.info-km{font-size:.55rem;color:var(--muted);letter-spacing:.12em}
+
+/* ── YEAR OVERLAY ── */
+.yr-overlay{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;z-index:6;opacity:0;transition:opacity .4s;
+}
+.yr-overlay.show{opacity:1}
+.yr-num{
+  font-family:'Cormorant Garamond',serif;font-size:min(14vw,12vh);font-weight:700;
+  color:rgba(232,184,75,.055);letter-spacing:.2em;user-select:none;
+}
+
+/* ── LOADER ── */
+.loader{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;z-index:100;transition:opacity .7s}
+.loader.gone{opacity:0;pointer-events:none}
+.loader-t{font-family:'Cormorant Garamond',serif;font-size:1.8rem;color:var(--accent)}
+.dots{display:flex;gap:.4rem}
+.dot{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out infinite}
+.dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+@keyframes pulse{0%,100%{opacity:.2;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">✈ Hành Trình <span>/ VIETNAM WORLD ROUTES</span></div>
+  <div class="year-tabs" id="yearTabs"></div>
+  <svg class="pring" viewBox="0 0 34 34" id="pring">
+    <circle class="bg" cx="17" cy="17" r="13.5"/>
+    <circle class="fg" id="pfg" cx="17" cy="17" r="13.5"/>
+  </svg>
+</div>
+
+<div class="map-wrap" id="mapWrap">
+  <div class="loader" id="loader">
+    <div class="loader-t">Đang tải bản đồ</div>
+    <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+  </div>
+  <div class="yr-overlay" id="yrOverlay"><div class="yr-num" id="yrNum"></div></div>
+  <svg id="mapSvg"></svg>
+  <div class="info-strip" id="infoStrip"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════════ */
+const JOURNEYS = {
+  2023:{
+    from:{name:"Vietnam",  coord:[106.0, 16.0]},
+    dests:[
+      {name:"Thailand",  label:"Thái Lan",  flag:"🇹🇭", coord:[100.5,15.5],  km:"1.780"},
+      {name:"Singapore", label:"Singapore", flag:"🇸🇬", coord:[103.8,1.3],   km:"1.170"},
+    ]
+  },
+  2024:{
+    from:{name:"Vietnam", coord:[106.0, 16.0]},
+    dests:[
+      {name:"United States of America", label:"Hoa Kỳ",   flag:"🇺🇸", coord:[-98.0,38.0], km:"12.900"},
+      {name:"South Korea",              label:"Hàn Quốc", flag:"🇰🇷", coord:[127.8,36.0],  km:"3.560"},
+    ]
+  },
+  2025:{
+    from:{name:"Vietnam", coord:[106.0, 16.0]},
+    dests:[
+      {name:"Japan",  label:"Nhật Bản", flag:"🇯🇵", coord:[138.0,36.5],  km:"4.010"},
+      {name:"Cuba",   label:"Cuba",     flag:"🇨🇺", coord:[-79.5,22.0],  km:"16.600"},
+      {name:"Russia", label:"Nga",      flag:"🇷🇺", coord:[100.0,62.0],  km:"7.200"},
+    ]
+  }
+};
+const YEARS = Object.keys(JOURNEYS).map(Number).sort();
+
+const ISO={
+  4:"Afghanistan",8:"Albania",12:"Algeria",24:"Angola",32:"Argentina",
+  36:"Australia",40:"Austria",50:"Bangladesh",56:"Belgium",68:"Bolivia",
+  76:"Brazil",100:"Bulgaria",116:"Cambodia",124:"Canada",152:"Chile",
+  156:"China",170:"Colombia",188:"Costa Rica",191:"Croatia",192:"Cuba",
+  208:"Denmark",218:"Ecuador",818:"Egypt",246:"Finland",250:"France",
+  276:"Germany",288:"Ghana",300:"Greece",356:"India",360:"Indonesia",
+  364:"Iran",368:"Iraq",372:"Ireland",380:"Italy",392:"Japan",
+  398:"Kazakhstan",404:"Kenya",408:"North Korea",410:"South Korea",
+  418:"Laos",458:"Malaysia",484:"Mexico",496:"Mongolia",504:"Morocco",
+  524:"Nepal",528:"Netherlands",554:"New Zealand",566:"Nigeria",
+  578:"Norway",586:"Pakistan",604:"Peru",608:"Philippines",616:"Poland",
+  620:"Portugal",634:"Qatar",642:"Romania",643:"Russia",
+  682:"Saudi Arabia",710:"South Africa",724:"Spain",752:"Sweden",
+  756:"Switzerland",764:"Thailand",792:"Turkey",804:"Ukraine",
+  784:"United Arab Emirates",826:"United Kingdom",
+  840:"United States of America",858:"Uruguay",862:"Venezuela",
+  704:"Vietnam",702:"Singapore",714:"Cambodia",716:"Zimbabwe",
+};
+
+/* ═══════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════ */
+const svg    = d3.select("#mapSvg");
+const wrap   = document.getElementById('mapWrap');
+let W, H;
+let proj, pathGen;
+let worldCountries;
+let gCountries, gArcs, gPins, gPlanes;
+let currentYear = YEARS[0];
+let cycleTimer  = null;
+let rafHandles  = [];
+const CYCLE_MS  = 9000;
+const FLIGHT_MS = 3500;
+
+/* ═══════════════════════════════════════════════
+   INIT / RESIZE
+═══════════════════════════════════════════════ */
+function initSVG(){
+  W = wrap.clientWidth;
+  H = wrap.clientHeight;
+  proj    = d3.geoNaturalEarth1().scale(W/6.1).translate([W/2, H/2]);
+  pathGen = d3.geoPath(proj);
+  svg.attr("viewBox",`0 0 ${W} ${H}`).attr("width",W).attr("height",H);
+}
+
+function buildBasemap(){
+  svg.selectAll("*").remove();
+
+  // ocean
+  svg.append("rect").attr("width",W).attr("height",H).attr("fill","#0c1520");
+
+  // graticule
+  svg.append("path").attr("class","graticule").attr("d", pathGen(d3.geoGraticule()()));
+
+  // countries
+  gCountries = svg.append("g");
+  gCountries.selectAll(".country")
+    .data(worldCountries)
+    .join("path")
+    .attr("class","country")
+    .attr("data-name", d => d.properties.name||"")
+    .attr("d", pathGen);
+
+  // globe border
+  svg.append("path")
+    .attr("fill","none").attr("stroke","rgba(255,255,255,0.04)").attr("stroke-width",.8)
+    .attr("d", pathGen({type:"Sphere"}));
+
+  gArcs   = svg.append("g");
+  gPins   = svg.append("g");
+  gPlanes = svg.append("g");
+}
+
+/* ═══════════════════════════════════════════════
+   LOAD
+═══════════════════════════════════════════════ */
+fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+  .then(r => r.json())
+  .then(world => {
+    const feats = topojson.feature(world, world.objects.countries).features;
+    feats.forEach(f => { f.properties.name = ISO[+f.id]||null; });
+    worldCountries = feats.filter(f => f.properties.name);
+
+    initSVG();
+    buildBasemap();
+    buildTabs();
+    document.getElementById('loader').classList.add('gone');
+    startCycle();
+  })
+  .catch(e => {
+    document.getElementById('loader').innerHTML =
+      `<div class="loader-t" style="color:#e85">Lỗi: ${e.message}</div>`;
+  });
+
+window.addEventListener('resize', () => {
+  initSVG(); buildBasemap(); playYear(currentYear, false);
+});
+
+/* ═══════════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════════ */
+function buildTabs(){
+  const c = document.getElementById('yearTabs');
+  YEARS.forEach(yr => {
+    const b = document.createElement('button');
+    b.className='ytab'; b.textContent=yr; b.id=`yt${yr}`;
+    b.onclick = () => { stopCycle(); playYear(yr, false); scheduleResume(); };
+    c.appendChild(b);
+  });
+}
+function setTab(yr){
+  document.querySelectorAll('.ytab').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`yt${yr}`)?.classList.add('active');
+}
+
+/* ═══════════════════════════════════════════════
+   CYCLE
+═══════════════════════════════════════════════ */
+let cycleIdx = 0;
+function startCycle(){
+  cycleIdx = YEARS.indexOf(currentYear);
+  if(cycleIdx<0) cycleIdx=0;
+  runNext();
+}
+function runNext(){
+  playYear(YEARS[cycleIdx], true);
+  cycleTimer = setTimeout(() => {
+    cycleIdx = (cycleIdx+1) % YEARS.length;
+    runNext();
+  }, CYCLE_MS);
+}
+function stopCycle(){
+  if(cycleTimer){ clearTimeout(cycleTimer); cycleTimer=null; }
+  stopProgress();
+}
+function scheduleResume(){
+  stopCycle();
+  cycleTimer = setTimeout(() => {
+    cycleIdx = (YEARS.indexOf(currentYear)+1) % YEARS.length;
+    startCycle2();
+  }, CYCLE_MS);
+}
+function startCycle2(){
+  runNext();
+}
+
+/* ═══════════════════════════════════════════════
+   PROGRESS RING
+═══════════════════════════════════════════════ */
+const CIRC = 2 * Math.PI * 13.5;
+let progRAF = null;
+let progStart = 0;
+function startProgress(dur){
+  stopProgress();
+  const fg = document.getElementById('pfg');
+  fg.style.strokeDasharray  = `0 ${CIRC}`;
+  fg.style.strokeDashoffset = '0';
+  progStart = performance.now();
+  function tick(now){
+    const t = Math.min((now-progStart)/dur, 1);
+    fg.style.strokeDasharray = `${t*CIRC} ${(1-t)*CIRC}`;
+    if(t<1) progRAF = requestAnimationFrame(tick);
+  }
+  progRAF = requestAnimationFrame(tick);
+}
+function stopProgress(){
+  if(progRAF){ cancelAnimationFrame(progRAF); progRAF=null; }
+}
+
+/* ═══════════════════════════════════════════════
+   PLAY YEAR
+═══════════════════════════════════════════════ */
+function playYear(yr, auto){
+  currentYear = yr;
+  setTab(yr);
+  if(auto) startProgress(CYCLE_MS);
+
+  // cancel running animations
+  rafHandles.forEach(id=>cancelAnimationFrame(id));
+  rafHandles=[];
+  gArcs.selectAll("*").remove();
+  gPins.selectAll("*").remove();
+  gPlanes.selectAll("*").remove();
+
+  // reset countries
+  gCountries.selectAll(".country")
+    .classed("is-origin",false)
+    .classed("is-dest",false);
+
+  // year flash
+  const ov = document.getElementById('yrOverlay');
+  document.getElementById('yrNum').textContent = yr;
+  ov.classList.add('show');
+  setTimeout(()=>ov.classList.remove('show'), 1100);
+
+  const data = JOURNEYS[yr];
+
+  // origin
+  colorCountry(data.from.name, "is-origin");
+  const fromPx = proj(data.from.coord);
+
+  // origin dot
+  if(fromPx){
+    gPins.append("circle").attr("class","origin-dot")
+      .attr("cx",fromPx[0]).attr("cy",fromPx[1]).attr("r",5);
+  }
+
+  // info strip
+  buildInfo(data);
+
+  // launch all planes simultaneously
+  data.dests.forEach((dest, i) => {
+    colorCountry(dest.name, "is-dest");
+    const toPx = proj(dest.coord);
+    if(!fromPx || !toPx) return;
+    addPin(toPx, dest, i);
+    flyLine(fromPx, toPx, i);
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   COLOR COUNTRY
+═══════════════════════════════════════════════ */
+function colorCountry(name, cls){
+  gCountries.selectAll(".country")
+    .filter(d => d.properties.name &&
+      d.properties.name.toLowerCase() === name.toLowerCase())
+    .classed(cls, true);
+}
+
+/* ═══════════════════════════════════════════════
+   PIN
+═══════════════════════════════════════════════ */
+function addPin(toPx, dest, i){
+  const g = gPins.append("g").attr("transform",`translate(${toPx[0]},${toPx[1]})`).attr("opacity",0);
+  g.append("circle").attr("class","pin-ring").attr("r",4);
+  g.append("circle").attr("class","pin-core").attr("r",4);
+
+  // label offset — alternate above/below to avoid overlap
+  const ly = i%2===0 ? -10 : 10;
+  g.append("text").attr("class","dest-label")
+    .attr("x",8).attr("y",ly)
+    .text(`${dest.flag} ${dest.label||dest.name}`);
+
+  g.transition().delay(200).duration(350).attr("opacity",1);
+}
+
+/* ═══════════════════════════════════════════════
+   FLY LINE — straight in projected 2D space
+═══════════════════════════════════════════════ */
+function flyLine(fromPx, toPx, index){
+  // straight dashed line
+  const line = gArcs.append("line")
+    .attr("class","arc-line")
+    .attr("x1", fromPx[0]).attr("y1", fromPx[1])
+    .attr("x2", fromPx[0]).attr("y2", fromPx[1])  // starts collapsed
+    .attr("stroke","#e8b84b")
+    .attr("stroke-dasharray","6 5");
+
+  // plane icon
+  const plane = gPlanes.append("text")
+    .attr("class","plane-icon")
+    .attr("x", fromPx[0]).attr("y", fromPx[1])
+    .attr("opacity",0)
+    .text("✈");
+
+  const dx = toPx[0] - fromPx[0];
+  const dy = toPx[1] - fromPx[1];
+  const angleDeg = Math.atan2(dy, dx) * 180 / Math.PI;
+
+  const startT = performance.now();
+
+  function ease(t){ return t<.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+  function frame(now){
+    const raw = Math.min((now - startT) / FLIGHT_MS, 1);
+    const t   = ease(raw);
+
+    // extend line from origin toward dest
+    const cx = fromPx[0] + dx * t;
+    const cy = fromPx[1] + dy * t;
+    line.attr("x2", cx).attr("y2", cy);
+
+    // plane follows the tip
+    // scale: ramp up at start, ramp down at end
+    const scale = raw < 0.08 ? raw/0.08 :
+                  raw > 0.92 ? (1-raw)/0.08 : 1;
+
+    plane
+      .attr("x", cx).attr("y", cy)
+      .attr("opacity", scale)
+      .attr("transform",
+        `rotate(${angleDeg}, ${cx}, ${cy}) translate(-8, 0)`);
+
+    if(raw < 1){
+      rafHandles.push(requestAnimationFrame(frame));
+    } else {
+      // plane disappears, line stays
+      plane.transition().duration(400).attr("opacity",0).remove();
+      // keep the full line
+      line.attr("x2", toPx[0]).attr("y2", toPx[1]);
+    }
+  }
+
+  rafHandles.push(requestAnimationFrame(frame));
+}
+
+/* ═══════════════════════════════════════════════
+   INFO STRIP
+═══════════════════════════════════════════════ */
+function buildInfo(data){
+  const strip = document.getElementById('infoStrip');
+  strip.innerHTML = data.dests.map((d,i) =>
+    (i>0?'<div class="info-divider"></div>':'') +
+    `<div class="info-item">
+      <div class="info-flag">${d.flag}</div>
+      <div class="info-name">${d.label||d.name}</div>
+      <div class="info-km">${d.km} km</div>
+    </div>`
+  ).join('');
+}
+</script>
+</body>
+</html>
