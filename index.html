@@ -479,7 +479,7 @@ function flyLine(fromPx, toPx, index){
 
     plane
       .attr("opacity", scale)
-      .attr("transform", `translate(${cx},${cy}) rotate(${angleDeg}) scale(${1.2})`);
+      .attr("transform", `translate(${cx},${cy}) rotate(${angleDeg + 90}) scale(${1.2})`);
 
     if(raw < 1){
       rafHandles.push(requestAnimationFrame(frame));
